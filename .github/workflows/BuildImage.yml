@@ -1,0 +1,53 @@
+name: Build Docker Image
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  ENDPOINT: "ghcr.io/${{ github.repository_owner }}/diffractarr"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Lint
+        run: pip install flake8 && flake8 src/ tests/
+
+      - name: Build test image
+        run: docker build --target test -t diffractarr-test .
+
+      - name: Run tests
+        run: docker run --rm diffractarr-test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.ENDPOINT }}:latest
+            ${{ env.ENDPOINT }}:${{ github.sha }}
